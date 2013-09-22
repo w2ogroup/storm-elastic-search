@@ -32,7 +32,7 @@ import com.hmsonline.storm.elasticsearch.mapper.TridentElasticSearchMapper;
 public class ElasticSearchState implements State {
     private static final Logger LOGGER = LoggerFactory.getLogger(ElasticSearchState.class);
 
-    private static Client sharedClient;
+    private static TransportClient sharedClient;
 
     private Client client;
 
@@ -126,7 +126,11 @@ public class ElasticSearchState implements State {
             return sharedClient;
         }
         Settings settings = ImmutableSettings.settingsBuilder().put("cluster.name", clusterName).build();
-        sharedClient = new TransportClient(settings).addTransportAddress(new InetSocketTransportAddress(host, port));
+        String[] hosts = host.split(",");
+        sharedClient = new TransportClient(settings);
+        for(String h : hosts) {
+            sharedClient.addTransportAddress(new InetSocketTransportAddress(h, port));
+        }
         return sharedClient;
     }
 
