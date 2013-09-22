@@ -69,15 +69,15 @@ public class ElasticSearchState implements State {
             String indexName = mapper.mapToIndex(tuple);
             String type = mapper.mapToType(tuple);
             String key = mapper.mapToKey(tuple);
-            Map<String, Object> data = mapper.mapToData(tuple);
+            String data = mapper.mapToData(tuple);
             String parentId = mapper.mapToParentId(tuple);
 
-            if (!existingIndex.contains(indexName)
-                    && !client.admin().indices().exists(new IndicesExistsRequest(indexName)).actionGet().isExists()) {
-                createIndex(bulkRequest, indexName, mapper.mapToIndexSettings(tuple));
-                createMapping(bulkRequest, indexName, type, mapper.mapToMappingSettings(tuple));
-                existingIndex.add(indexName);
-            }
+//            if (!existingIndex.contains(indexName)
+//                    && !client.admin().indices().exists(new IndicesExistsRequest(indexName)).actionGet().isExists()) {
+//                createIndex(bulkRequest, indexName, mapper.mapToIndexSettings(tuple));
+//                createMapping(bulkRequest, indexName, type, mapper.mapToMappingSettings(tuple));
+//                existingIndex.add(indexName);
+//            }
             if (StringUtils.isBlank(parentId)) {
                 bulkRequest.add(client.prepareIndex(indexName, type, key).setSource(data));
             } else {
@@ -129,7 +129,8 @@ public class ElasticSearchState implements State {
         String[] hosts = host.split(",");
         sharedClient = new TransportClient(settings);
         for(String h : hosts) {
-            sharedClient.addTransportAddress(new InetSocketTransportAddress(h, port));
+            String[] split = h.split(":");
+            sharedClient.addTransportAddress(new InetSocketTransportAddress(split[0], port));
         }
         return sharedClient;
     }
