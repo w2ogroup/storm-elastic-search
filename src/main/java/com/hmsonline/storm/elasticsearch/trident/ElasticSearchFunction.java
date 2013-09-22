@@ -72,7 +72,7 @@ public class ElasticSearchFunction extends BaseFunction {
         String indexName = tridentElasticSearchMapper.mapToIndex(tuple);
         String type = tridentElasticSearchMapper.mapToType(tuple);
         String key = tridentElasticSearchMapper.mapToKey(tuple);
-        Map<String, Object> data = tridentElasticSearchMapper.mapToData(tuple);
+        String data = tridentElasticSearchMapper.mapToData(tuple);
         String parentId = tridentElasticSearchMapper.mapToParentId(tuple);
 
         // TODO: this is not efficient. Creating indices should happen at
