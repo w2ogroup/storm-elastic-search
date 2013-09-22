@@ -32,6 +32,8 @@ import com.hmsonline.storm.elasticsearch.mapper.TridentElasticSearchMapper;
 public class ElasticSearchState implements State {
     private static final Logger LOGGER = LoggerFactory.getLogger(ElasticSearchState.class);
 
+    private static Client sharedClient;
+
     private Client client;
 
     @SuppressWarnings("rawtypes")
@@ -40,9 +42,7 @@ public class ElasticSearchState implements State {
         String clusterName = (String) config.get(StormElasticSearchConstants.ES_CLUSTER_NAME);
         String host = (String) config.get(StormElasticSearchConstants.ES_HOST);
         Integer port = (Integer) config.get(StormElasticSearchConstants.ES_PORT);
-
-        Settings settings = ImmutableSettings.settingsBuilder().put("cluster.name", clusterName).build();
-        client = new TransportClient(settings).addTransportAddress(new InetSocketTransportAddress(host, port));
+        client = getSharedClient(clusterName, host, port);
         LOGGER.debug("Initialization completed with [clusterName=" + clusterName + ", host=" + host + ", port=" + port
                 + "]");
     }
@@ -120,4 +120,14 @@ public class ElasticSearchState implements State {
             StormElasticSearchUtils.handleElasticSearchException(getClass(), e);
         }
     }
+
+    private static synchronized Client getSharedClient(String clusterName, String host, int port) {
+        if(sharedClient != null) {
+            return sharedClient;
+        }
+        Settings settings = ImmutableSettings.settingsBuilder().put("cluster.name", clusterName).build();
+        sharedClient = new TransportClient(settings).addTransportAddress(new InetSocketTransportAddress(host, port));
+        return sharedClient;
+    }
+
 }
