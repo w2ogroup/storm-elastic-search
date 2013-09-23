@@ -16,9 +16,26 @@ public class ElasticSearchStateFactory implements StateFactory {
      */
     private static final long serialVersionUID = -6363900741883372326L;
 
+    private boolean strictMode;
+
+    /**
+     * Factory will create ElasticSearchState in default StrictMode.
+     */
+    public ElasticSearchStateFactory() {
+        this(true);
+    }
+
+    /**
+     *
+     * @param strictMode  Set to false to turn off StrictMode
+     */
+    public ElasticSearchStateFactory(boolean strictMode) {
+        this.strictMode = strictMode;
+    }
+
     @Override
     public State makeState(Map conf, int i, int i2) {
-        return new ElasticSearchState(conf);
+        return new ElasticSearchState(conf, this.strictMode);
     }
 
     /*

@@ -11,6 +11,7 @@ import java.util.Set;
 import org.apache.commons.lang.StringUtils;
 import org.elasticsearch.ElasticSearchException;
 import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRequest;
+import org.elasticsearch.action.bulk.BulkItemResponse;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.client.Client;
@@ -21,6 +22,7 @@ import org.elasticsearch.common.transport.InetSocketTransportAddress;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import storm.trident.operation.TridentCollector;
 import storm.trident.state.State;
 import storm.trident.tuple.TridentTuple;
 import backtype.storm.topology.FailedException;
@@ -29,15 +31,22 @@ import com.hmsonline.storm.elasticsearch.StormElasticSearchConstants;
 import com.hmsonline.storm.elasticsearch.StormElasticSearchUtils;
 import com.hmsonline.storm.elasticsearch.mapper.TridentElasticSearchMapper;
 
+/**
+ * ElasticSearchState can either index or update.
+ * By default the state is in StrictMode.  In StrictMode it will fail a transaction batch of tuples if it receives
+ * an failures from a response from elasticsearch.  If strictMode is disabled, it will only fail batches if
+ * elasticsearch throws an exception while processing a bulk request or if every action returns a failed response.
+ */
 public class ElasticSearchState implements State {
     private static final Logger LOGGER = LoggerFactory.getLogger(ElasticSearchState.class);
 
     private static TransportClient sharedClient;
 
     private Client client;
+    private boolean strictMode;
 
     @SuppressWarnings("rawtypes")
-    public ElasticSearchState(Map config) {
+    public ElasticSearchState(Map config, boolean strictMode) {
         LOGGER.debug("Initialize ElasticSearchState");
         String clusterName = (String) config.get(StormElasticSearchConstants.ES_CLUSTER_NAME);
         String host = (String) config.get(StormElasticSearchConstants.ES_HOST);
@@ -46,10 +55,12 @@ public class ElasticSearchState implements State {
         client = getSharedClient(clusterName, host, port);
         LOGGER.debug("Initialization completed with [clusterName=" + clusterName + ", host=" + host + ", port=" + port
                 + "]");
+        this.strictMode = strictMode;
     }
 
     public ElasticSearchState(Client client) {
         this.client = client;
+        this.strictMode = true;
     }
 
     @Override
@@ -62,7 +73,7 @@ public class ElasticSearchState implements State {
         LOGGER.debug("Commit ES: " + txid);
     }
 
-    public void createIndices(TridentElasticSearchMapper mapper, List<TridentTuple> tuples) {
+    public void createIndices(TridentElasticSearchMapper mapper, List<TridentTuple> tuples, TridentCollector collector) {
         BulkRequestBuilder bulkRequest = client.prepareBulk();
 
         Set<String> existingIndex = new HashSet<String>();
@@ -90,12 +101,71 @@ public class ElasticSearchState implements State {
         try {
             BulkResponse bulkResponse = bulkRequest.execute().actionGet();
             if (bulkResponse.hasFailures()) {
-                // Index failed. Retry!
-                throw new FailedException("Cannot create index via ES: " + bulkResponse.buildFailureMessage());
+                if(strictMode) {
+                    // Index failed. Retry!
+                    FailedException fail = new FailedException("Cannot create index via ES: " + bulkResponse.buildFailureMessage());
+                    collector.reportError(fail);
+                    throw fail;
+                }
+                else {
+                    int numRequest = bulkRequest.numberOfActions();
+                    int failedCount = 0;
+                    for(BulkItemResponse itemResponse : bulkResponse.getItems()) {
+                        if(itemResponse.isFailed()) {
+                            ++failedCount;
+                        }
+                    }
+                    if(failedCount == numRequest) {
+                        FailedException fail = new FailedException("All requests failed: " + bulkResponse.buildFailureMessage());
+                        collector.reportError(fail);
+                        throw fail;
+                    }
+                }
             }
         } catch (ElasticSearchException e) {
             StormElasticSearchUtils.handleElasticSearchException(getClass(), e);
         }
+    }
+
+    public void bulkUpdate(TridentElasticSearchMapper mapper, List<TridentTuple> tuples, TridentCollector collector) {
+        BulkRequestBuilder bulkRequest = this.client.prepareBulk();
+        for(TridentTuple tuple : tuples) {
+            String indexName = mapper.mapToIndex(tuple);
+            String type = mapper.mapToType(tuple);
+            String key = mapper.mapToKey(tuple);
+            String updateScript = mapper.mapToUpdateScript(tuple);
+            Map<String, Object> updateParams = mapper.mapToUpdateScriptParams(tuple);
+            bulkRequest.add(this.client.prepareUpdate(indexName, type, key).setScript(updateScript).setScriptParams(updateParams));
+        }
+        try {
+            BulkResponse bulkResponse = bulkRequest.execute().actionGet();
+            if(bulkResponse.hasFailures()) {
+                if(strictMode) {
+                    FailedException fail = new FailedException("Cannot update via ES: "+bulkResponse.buildFailureMessage());
+                    LOGGER.error("Cannot update via ES: {}",bulkResponse.buildFailureMessage());
+                    collector.reportError(fail);
+                    throw fail;
+                }
+                else {
+                    int numRequest = bulkRequest.numberOfActions();
+                    int failedCount = 0;
+                    for(BulkItemResponse itemResponse : bulkResponse.getItems()) {
+                        if(itemResponse.isFailed()) {
+                            ++failedCount;
+                        }
+                    }
+                    if(failedCount == numRequest) {
+                        FailedException fail = new FailedException("All requests failed: " + bulkResponse.buildFailureMessage());
+                        collector.reportError(fail);
+                        throw fail;
+                    }
+                }
+            }
+        } catch (ElasticSearchException e ) {
+            StormElasticSearchUtils.handleElasticSearchException(getClass(), e);
+        }
+
+
     }
 
     private void createIndex(BulkRequestBuilder bulkRequest, String indexName, Settings indicesSettings) {

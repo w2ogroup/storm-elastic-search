@@ -20,24 +20,33 @@ public class ElasticSearchStateUpdater extends BaseStateUpdater<ElasticSearchSta
 
     private TridentElasticSearchMapper mapper;
     private boolean emitValue;
+    private RequestType requestType;
 
-    public ElasticSearchStateUpdater(TridentElasticSearchMapper mapper) {
-        this(mapper, Boolean.FALSE);
+    public ElasticSearchStateUpdater(TridentElasticSearchMapper mapper, RequestType requestType) {
+        this(mapper, Boolean.FALSE, requestType);
     }
 
-    public ElasticSearchStateUpdater(TridentElasticSearchMapper mapper, boolean emitValue) {
+    public ElasticSearchStateUpdater(TridentElasticSearchMapper mapper, boolean emitValue, RequestType requestType) {
         this.mapper = mapper;
         this.emitValue = emitValue;
+        this.requestType = requestType;
     }
 
     @Override
     public void updateState(ElasticSearchState state, List<TridentTuple> tuples, TridentCollector collector) {
-        state.createIndices(mapper, tuples);
+        if(this.requestType == RequestType.INDEX)
+            state.createIndices(mapper, tuples, collector);
+        else
+            state.bulkUpdate(mapper, tuples, collector);
         if (emitValue) {
             for (TridentTuple tuple : tuples) {
                 collector.emit(tuple.getValues());
             }
         }
+    }
+
+    public static enum RequestType {
+        INDEX, UPDATE
     }
 
 }

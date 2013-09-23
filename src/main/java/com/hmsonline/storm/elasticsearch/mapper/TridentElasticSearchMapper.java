@@ -60,6 +60,21 @@ public interface TridentElasticSearchMapper extends Serializable {
      */
     public String mapToData(TridentTuple tuple);
 
+    /**
+     * Given a <code>backtype.storm.tuple.Tuple</code> object, map to the update script.
+     * @param tuple
+     * @return  text of a valid elasticsearch update script.
+     */
+    public String mapToUpdateScript(TridentTuple tuple);
+
+    /**
+     * Given a <code>backtype.storm.tuple.Tuple</code> object, map to the update script parameters.
+     * @param tuple
+     * @return parameters for update script.
+     */
+    public Map<String, Object> mapToUpdateScriptParams(TridentTuple tuple);
+
+
     public Settings mapToIndexSettings(TridentTuple tuple);
 
     @SuppressWarnings("rawtypes")

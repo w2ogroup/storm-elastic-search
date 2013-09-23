@@ -20,16 +20,19 @@ import storm.trident.tuple.TridentTuple;
 
 import com.hmsonline.storm.elasticsearch.StormElasticSearchAbstractTest;
 import com.hmsonline.storm.elasticsearch.mapper.TridentElasticSearchMapper;
-@Ignore
+import static com.hmsonline.storm.elasticsearch.trident.ElasticSearchStateUpdater.*;
+
+
 public class ElasticSearchFunctionTest extends StormElasticSearchAbstractTest {
 
     private String indexName = "index_name";
     private String indexType = "index_type";
     private String indexKey = "index_key";
+    private String updateScript = "ctx._source.message = messParam";
 
     @Test
     public void testFunction() {
-        ElasticSearchStateUpdater function = new ElasticSearchStateUpdater(createMapper());
+        ElasticSearchStateUpdater function = new ElasticSearchStateUpdater(createMapper(), RequestType.INDEX);
         ElasticSearchState state = new ElasticSearchState(getClient());
         function.updateState(state, getTuples(), Mockito.mock(TridentCollector.class));
 
@@ -40,6 +43,19 @@ public class ElasticSearchFunctionTest extends StormElasticSearchAbstractTest {
 
         Assert.assertEquals("kimchy", response.getSource().get("user"));
         Assert.assertEquals("trying out Elastic Search", response.getSource().get("message"));
+
+        function = new ElasticSearchStateUpdater(createMapper(), RequestType.UPDATE);
+        function.updateState(state, getTuples(), Mockito.mock(TridentCollector.class));
+
+        response = getClient().prepareGet(indexName, indexType, indexKey).execute().actionGet();
+        Assert.assertEquals(indexName, response.getIndex());
+        Assert.assertEquals(indexType, response.getType());
+        Assert.assertEquals(indexKey, response.getId());
+
+        Assert.assertEquals("kimchy", response.getSource().get("user"));
+        Assert.assertEquals("trying out Elastic Search update", response.getSource().get("message"));
+
+
     }
 
     private TridentElasticSearchMapper createMapper() {
@@ -49,12 +65,14 @@ public class ElasticSearchFunctionTest extends StormElasticSearchAbstractTest {
         Mockito.when(mapper.mapToKey(Mockito.any(TridentTuple.class))).thenReturn(indexKey);
 
         Map<String, Object> json = new HashMap<String, Object>();
-        json.put("user", "kimchy");
-        json.put("message", "trying out Elastic Search");
-//        Mockito.when(mapper.mapToData(Mockito.any(TridentTuple.class))).thenReturn(json);
+//        json.put("user", "kimchy");
+        json.put("messParam", "trying out Elastic Search update");
+        Mockito.when(mapper.mapToData(Mockito.any(TridentTuple.class))).thenReturn("{\"user\":\"kimchy\",\"message\":\"trying out Elastic Search\"}");
         Mockito.when(mapper.mapToParentId(Mockito.any(TridentTuple.class))).thenReturn(null);
         Mockito.when(mapper.mapToIndexSettings(Mockito.any(TridentTuple.class))).thenReturn(null);
         Mockito.when(mapper.mapToMappingSettings(Mockito.any(TridentTuple.class))).thenReturn(null);
+        Mockito.when(mapper.mapToUpdateScript(Mockito.any(TridentTuple.class))).thenReturn(updateScript);
+        Mockito.when(mapper.mapToUpdateScriptParams(Mockito.any(TridentTuple.class))).thenReturn(json);
         return mapper;
     }
 
