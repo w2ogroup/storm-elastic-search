@@ -41,7 +41,8 @@ public class ElasticSearchState implements State {
         LOGGER.debug("Initialize ElasticSearchState");
         String clusterName = (String) config.get(StormElasticSearchConstants.ES_CLUSTER_NAME);
         String host = (String) config.get(StormElasticSearchConstants.ES_HOST);
-        Integer port = (Integer) config.get(StormElasticSearchConstants.ES_PORT);
+        Object portObj = config.get(StormElasticSearchConstants.ES_PORT);
+        Integer port = portObj instanceof Long ? ((Long)portObj).intValue() : (Integer)portObj;
         client = getSharedClient(clusterName, host, port);
         LOGGER.debug("Initialization completed with [clusterName=" + clusterName + ", host=" + host + ", port=" + port
                 + "]");
