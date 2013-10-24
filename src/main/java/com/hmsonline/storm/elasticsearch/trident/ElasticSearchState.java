@@ -154,11 +154,11 @@ public class ElasticSearchState implements State {
                             ++failedCount;
                         }
                     }
-                    if(failedCount == numRequest) {
-                        FailedException fail = new FailedException("All requests failed: " + bulkResponse.buildFailureMessage());
-                        collector.reportError(fail);
-                        throw fail;
-                    }
+//                    if(failedCount == numRequest) {
+//                        FailedException fail = new FailedException("All requests failed: " + bulkResponse.buildFailureMessage());
+//                        collector.reportError(fail);
+//                        throw fail;
+//                    }
                 }
             }
         } catch (ElasticSearchException e ) {
